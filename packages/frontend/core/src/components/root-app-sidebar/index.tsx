@@ -214,11 +214,7 @@ export const RootAppSidebar = ({
     <AppSidebar
       router={router}
       hasBackground={
-        !(
-          appSettings.enableBlurBackground &&
-          environment.isDesktop &&
-          environment.isMacOs
-        )
+        !(appSettings.enableBlurBackground && environment.isDesktop)
       }
       generalShortcutsInfo={generalShortcutsInfo}
     >
