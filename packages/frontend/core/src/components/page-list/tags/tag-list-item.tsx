@@ -25,7 +25,7 @@ const TagListTitleCell = ({
         data-testid="page-list-item-preview-text"
         className={styles.titleCellPreview}
       >
-        {`· ${pageCount} doc(s)`}
+        {` · ${t['com.affine.tags.count']({ count: pageCount || 0 })}`}
       </div>
     </div>
   );
@@ -33,12 +33,14 @@ const TagListTitleCell = ({
 
 const ListIconCell = ({ color }: Pick<TagListItemProps, 'color'>) => {
   return (
-    <div
-      className={styles.tagIndicator}
-      style={{
-        backgroundColor: tagColorMap(color),
-      }}
-    />
+    <div className={styles.tagIndicatorWrapper}>
+      <div
+        className={styles.tagIndicator}
+        style={{
+          backgroundColor: tagColorMap(color),
+        }}
+      />
+    </div>
   );
 };
 
