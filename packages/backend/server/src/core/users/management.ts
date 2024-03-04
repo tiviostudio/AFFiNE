@@ -26,7 +26,7 @@ export class UserManagementResolver {
   @Throttle({
     default: {
       limit: 10,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => Int)
@@ -49,7 +49,7 @@ export class UserManagementResolver {
   @Throttle({
     default: {
       limit: 10,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => Int)
@@ -70,7 +70,7 @@ export class UserManagementResolver {
   @Throttle({
     default: {
       limit: 10,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Query(() => [UserType])

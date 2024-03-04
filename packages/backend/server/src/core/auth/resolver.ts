@@ -55,7 +55,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 10,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Public()
@@ -71,7 +71,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 20,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @ResolveField(() => ClientTokenType, {
@@ -103,7 +103,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 10,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => UserType)
@@ -123,7 +123,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 10,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => UserType)
@@ -141,7 +141,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 5,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => UserType)
@@ -170,7 +170,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 5,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => UserType)
@@ -199,7 +199,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 5,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => Boolean)
@@ -232,7 +232,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 5,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => Boolean)
@@ -267,7 +267,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 5,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => Boolean)
@@ -293,7 +293,7 @@ export class AuthResolver {
   @Throttle({
     default: {
       limit: 5,
-      ttl: 60,
+      ttl: 60 * 1000,
     },
   })
   @Mutation(() => Boolean)
