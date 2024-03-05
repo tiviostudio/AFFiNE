@@ -150,7 +150,9 @@ export const getDefaultAFFiNEConfig: () => AFFiNEConfig = () => {
       playground: true,
     },
     auth: {
-      ttl: 30 * ONE_DAY_IN_SEC,
+      session: {
+        ttl: 15 * ONE_DAY_IN_SEC,
+      },
       accessToken: {
         ttl: 7 * ONE_DAY_IN_SEC,
         refreshTokenTtl: 30 * ONE_DAY_IN_SEC,

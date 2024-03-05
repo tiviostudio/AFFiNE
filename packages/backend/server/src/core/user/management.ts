@@ -8,7 +8,7 @@ import { Args, Context, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { CloudThrottlerGuard, Throttle } from '../../fundamentals';
 import { CurrentUser } from '../auth/current-user';
 import { FeatureManagementService } from '../features';
-import { UsersService } from './service';
+import { UserService } from './service';
 import { UserType } from './types';
 
 /**
@@ -19,7 +19,7 @@ import { UserType } from './types';
 @Resolver(() => UserType)
 export class UserManagementResolver {
   constructor(
-    private readonly users: UsersService,
+    private readonly users: UserService,
     private readonly feature: FeatureManagementService
   ) {}
 

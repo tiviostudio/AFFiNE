@@ -17,11 +17,10 @@ import {
 import type { Request, Response } from 'express';
 
 import { CloudThrottlerGuard, Config, Throttle } from '../../fundamentals';
-import { UserType } from '../users/types';
+import { UserType } from '../user/types';
 import { CurrentUser } from './current-user';
 import { Public } from './guard';
 import { AuthService } from './service';
-import { SessionService } from './session';
 import { TokenService, TokenType } from './token';
 
 @ObjectType('tokenType')
@@ -47,7 +46,6 @@ export class ClientTokenType {
 export class AuthResolver {
   constructor(
     private readonly config: Config,
-    private readonly session: SessionService,
     private readonly auth: AuthService,
     private readonly token: TokenService
   ) {}
@@ -86,7 +84,7 @@ export class AuthResolver {
       throw new ForbiddenException('Invalid user');
     }
 
-    const session = await this.session.createSession(
+    const session = await this.auth.createUserSession(
       user,
       undefined,
       this.config.auth.accessToken.ttl
@@ -114,7 +112,7 @@ export class AuthResolver {
     @Args('password') password: string
   ) {
     const user = await this.auth.signUp(name, email, password);
-    await this.session.setCookie(ctx.req, ctx.res, user);
+    await this.auth.setCookie(ctx.req, ctx.res, user);
     ctx.req.user = user;
     return user;
   }
@@ -133,7 +131,7 @@ export class AuthResolver {
     @Args('password') password: string
   ) {
     const user = await this.auth.signIn(email, password);
-    await this.session.setCookie(ctx.req, ctx.res, user);
+    await this.auth.setCookie(ctx.req, ctx.res, user);
     ctx.req.user = user;
     return user;
   }

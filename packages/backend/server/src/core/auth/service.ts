@@ -1,32 +1,86 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
+  NotAcceptableException,
+  NotFoundException,
   OnApplicationBootstrap,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
 import { PrismaClient, type User } from '@prisma/client';
-import { nanoid } from 'nanoid';
+import type { CookieOptions, Request, Response } from 'express';
+import { assign, omit } from 'lodash-es';
+import z from 'zod';
 
-import {
-  Config,
-  MailService,
-  verifyChallengeResponse,
-} from '../../fundamentals';
+import { Config, MailService } from '../../fundamentals';
 import { FeatureManagementService } from '../features/management';
-import { UsersService } from '../users/service';
+import { UserService } from '../user/service';
 import type { CurrentUser } from './current-user';
-import { sessionUser } from './session';
+
+export function parseAuthUserSeqNum(value: any) {
+  switch (typeof value) {
+    case 'number': {
+      return value;
+    }
+    case 'string': {
+      value = Number.parseInt(value);
+      return Number.isNaN(value) ? 0 : value;
+    }
+
+    default: {
+      return 0;
+    }
+  }
+}
+
+export function sessionUser(user: User): CurrentUser {
+  return assign(omit(user, 'password', 'emailVerifiedAt', 'createdAt'), {
+    hasPassword: user.password !== null,
+    emailVerified: user.emailVerifiedAt !== null,
+  });
+}
+
+const credentialValidator = {
+  email: z.string().email(),
+  password: z.string().min(8).max(32),
+};
+
+export function isValidEmail(email: string) {
+  return credentialValidator.email.safeParse(email).success;
+}
+
+export function isValidPassword(password: string) {
+  return credentialValidator.password.safeParse(password).success;
+}
+
+export function assertValidCredential(credential: {
+  email: string;
+  password: string;
+}) {
+  const { success } = z.object(credentialValidator).safeParse(credential);
+
+  if (!success) {
+    throw new BadRequestException('Invalid credential');
+  }
+}
 
 @Injectable()
 export class AuthService implements OnApplicationBootstrap {
+  readonly cookieOptions: CookieOptions = {
+    sameSite: 'lax',
+    httpOnly: true,
+    path: '/',
+    domain: this.config.host,
+    secure: this.config.https,
+  };
+  readonly sessionCookieName = 'sid';
+  readonly authUserSeqCookieName = 'authuser';
+
   constructor(
     private readonly config: Config,
-    private readonly prisma: PrismaClient,
+    private readonly db: PrismaClient,
     private readonly mailer: MailService,
     private readonly feature: FeatureManagementService,
-    private readonly user: UsersService
+    private readonly user: UserService
   ) {}
 
   async onApplicationBootstrap() {
@@ -38,63 +92,11 @@ export class AuthService implements OnApplicationBootstrap {
   }
 
   canSignIn(email: string) {
-    return this.feature.canEarlyAccess(email);
-  }
-
-  async verifyCaptchaToken(token: any, ip: string) {
-    if (typeof token !== 'string' || !token) return false;
-
-    const formData = new FormData();
-    formData.append('secret', this.config.auth.captcha.turnstile.secret);
-    formData.append('response', token);
-    formData.append('remoteip', ip);
-    // prevent replay attack
-    formData.append('idempotency_key', nanoid());
-
-    const url = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-    const result = await fetch(url, {
-      body: formData,
-      method: 'POST',
-    });
-    const outcome = await result.json();
-
-    return (
-      !!outcome.success &&
-      // skip hostname check in dev mode
-      (this.config.node.dev || outcome.hostname === this.config.host)
-    );
-  }
-
-  async verifyChallengeResponse(response: any, resource: string) {
-    return verifyChallengeResponse(
-      response,
-      this.config.auth.captcha.challenge.bits,
-      resource
-    );
-  }
-
-  async signIn(email: string, password: string): Promise<CurrentUser> {
-    const user = await this.getUserByEmail(email);
-
-    if (!user) {
+    if (!isValidEmail(email)) {
       throw new BadRequestException('Invalid email');
     }
 
-    if (!user.password) {
-      throw new BadRequestException('User has no password');
-    }
-    let equal = false;
-    try {
-      equal = await verify(user.password, password);
-    } catch (e) {
-      console.error(e);
-      throw new InternalServerErrorException(e, 'Verify password failed');
-    }
-    if (!equal) {
-      throw new UnauthorizedException('Invalid password');
-    }
-
-    return sessionUser(user);
+    return this.feature.canEarlyAccess(email);
   }
 
   async signUp(
@@ -102,6 +104,8 @@ export class AuthService implements OnApplicationBootstrap {
     email: string,
     password: string
   ): Promise<CurrentUser> {
+    assertValidCredential({ email, password });
+
     const user = await this.getUserByEmail(email);
 
     if (user) {
@@ -119,18 +123,199 @@ export class AuthService implements OnApplicationBootstrap {
       .then(sessionUser);
   }
 
-  async getUserByEmail(email: string): Promise<User | null> {
-    return this.user.findUserByEmail(email);
-  }
+  async signIn(email: string, password: string) {
+    assertValidCredential({ email, password });
 
-  async doesUserHavePassword(email: string): Promise<boolean> {
-    const user = await this.getUserByEmail(email);
+    const user = await this.user.findUserWithHashedPasswordByEmail(email);
 
     if (!user) {
-      throw new BadRequestException('Invalid email');
+      throw new NotFoundException('User Not Found');
     }
 
-    return Boolean(user.password);
+    if (!user.password) {
+      throw new NotAcceptableException(
+        'User Password is not set. Should login throw email link.'
+      );
+    }
+
+    const passwordMatches = await verify(user.password, password);
+
+    if (!passwordMatches) {
+      throw new NotAcceptableException('Incorrect Password');
+    }
+
+    return sessionUser(user);
+  }
+
+  async getUser(token: string, seq = 0): Promise<CurrentUser | null> {
+    const session = await this.getSession(token);
+
+    // no such session
+    if (!session) {
+      return null;
+    }
+
+    const userSession = session.userSessions.at(seq);
+
+    // no such user session
+    if (!userSession) {
+      return null;
+    }
+
+    // user session expired
+    if (userSession.expiresAt && userSession.expiresAt <= new Date()) {
+      return null;
+    }
+
+    const user = await this.db.user.findUnique({
+      where: { id: userSession.userId },
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return sessionUser(user);
+  }
+
+  async getUserList(token: string) {
+    const session = await this.getSession(token);
+
+    if (!session || !session.userSessions.length) {
+      return [];
+    }
+
+    const users = await this.db.user.findMany({
+      where: {
+        id: {
+          in: session.userSessions.map(({ userId }) => userId),
+        },
+      },
+    });
+
+    // TODO(@forehalo): need to separate expired session, same for [getUser]
+    // Session
+    //   | { user: LimitedUser { email, avatarUrl }, expired: true }
+    //   | { user: User, expired: false }
+    return users.map(sessionUser);
+  }
+
+  async signOut(token: string, seq = 0) {
+    const session = await this.getSession(token);
+
+    if (session) {
+      // overflow the logged in user
+      if (session.userSessions.length <= seq) {
+        return session;
+      }
+
+      await this.db.userSession.deleteMany({
+        where: { id: session.userSessions[seq].id },
+      });
+
+      // no more user session active, delete the whole session
+      if (session.userSessions.length === 1) {
+        await this.db.session.delete({ where: { id: session.id } });
+        return null;
+      }
+
+      return session;
+    }
+
+    return null;
+  }
+
+  async getSession(token: string) {
+    return this.db.$transaction(async tx => {
+      const session = await tx.session.findUnique({
+        where: {
+          id: token,
+        },
+        include: {
+          userSessions: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        return null;
+      }
+
+      if (session.expiresAt && session.expiresAt <= new Date()) {
+        await tx.session.delete({
+          where: {
+            id: session.id,
+          },
+        });
+
+        return null;
+      }
+
+      return session;
+    });
+  }
+
+  async createUserSession(
+    user: { id: string },
+    existingSession?: string,
+    ttl = this.config.auth.session.ttl
+  ) {
+    const session = existingSession
+      ? await this.getSession(existingSession)
+      : null;
+
+    const expiresAt = new Date(Date.now() + ttl * 1000);
+    if (session) {
+      return this.db.userSession.upsert({
+        where: {
+          sessionId_userId: {
+            sessionId: session.id,
+            userId: user.id,
+          },
+        },
+        update: {
+          expiresAt,
+        },
+        create: {
+          sessionId: session.id,
+          userId: user.id,
+          expiresAt,
+        },
+      });
+    } else {
+      return this.db.userSession.create({
+        data: {
+          expiresAt,
+          session: {
+            create: {},
+          },
+          user: {
+            connect: {
+              id: user.id,
+            },
+          },
+        },
+      });
+    }
+  }
+
+  async setCookie(req: Request, res: Response, user: { id: string }) {
+    const session = await this.createUserSession(
+      user,
+      req.cookies[this.sessionCookieName]
+    );
+
+    res.cookie(this.sessionCookieName, session.sessionId, {
+      expires: session.expiresAt ?? void 0,
+      ...this.cookieOptions,
+    });
+  }
+
+  async getUserByEmail(email: string) {
+    return this.user.findUserByEmail(email);
   }
 
   async changePassword(email: string, newPassword: string): Promise<User> {
@@ -142,7 +327,7 @@ export class AuthService implements OnApplicationBootstrap {
 
     const hashedPassword = await hash(newPassword);
 
-    return this.prisma.user.update({
+    return this.db.user.update({
       where: {
         id: user.id,
       },
@@ -153,7 +338,7 @@ export class AuthService implements OnApplicationBootstrap {
   }
 
   async changeEmail(id: string, newEmail: string): Promise<User> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.db.user.findUnique({
       where: {
         id,
       },
@@ -163,7 +348,7 @@ export class AuthService implements OnApplicationBootstrap {
       throw new BadRequestException('Invalid email');
     }
 
-    return this.prisma.user.update({
+    return this.db.user.update({
       where: {
         id,
       },
@@ -175,7 +360,7 @@ export class AuthService implements OnApplicationBootstrap {
   }
 
   async setEmailVerified(id: string) {
-    return await this.prisma.user.update({
+    return await this.db.user.update({
       where: {
         id,
       },

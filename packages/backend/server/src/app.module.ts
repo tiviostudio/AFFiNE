@@ -14,7 +14,7 @@ import { FeatureModule } from './core/features';
 import { QuotaModule } from './core/quota';
 import { StorageModule } from './core/storage';
 import { SyncModule } from './core/sync';
-import { UsersModule } from './core/users';
+import { UserModule } from './core/user';
 import { WorkspaceModule } from './core/workspaces';
 import { getOptionalModuleMetadata } from './fundamentals';
 import { CacheInterceptor, CacheModule } from './fundamentals/cache';
@@ -145,7 +145,7 @@ function buildAppModule() {
       WebSocketModule,
       GqlModule,
       StorageModule,
-      UsersModule,
+      UserModule,
       WorkspaceModule,
       FeatureModule,
       QuotaModule

@@ -22,7 +22,7 @@ import { PrismaClient } from '@prisma/client';
 import { groupBy } from 'lodash-es';
 
 import { CurrentUser, Public } from '../../core/auth';
-import { UserType } from '../../core/users';
+import { UserType } from '../../core/user';
 import { Config } from '../../fundamentals';
 import { decodeLookupKey, SubscriptionService } from './service';
 import {

@@ -220,21 +220,29 @@ export interface AFFiNEConfig {
    * authentication config
    */
   auth: {
-    /**
-     * Application auth expiration time in seconds
-     */
-    ttl: number;
+    session: {
+      /**
+       * Application auth expiration time in seconds
+       *
+       * @default 15 days
+       */
+      ttl: number;
+    };
 
     /**
      * Application access token config
      */
     accessToken: {
       /**
-       * Application access token expiration time
+       * Application access token expiration time in seconds
+       *
+       * @default 7 days
        */
       ttl: number;
       /**
-       * Application refresh token expiration time
+       * Application refresh token expiration time in seconds
+       *
+       * @default 30 days
        */
       refreshTokenTtl: number;
     };

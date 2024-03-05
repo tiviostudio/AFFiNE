@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 
 import type { ClientTokenType } from '../../src/core/auth';
-import type { UserType } from '../../src/core/users';
+import type { UserType } from '../../src/core/user';
 import { gql } from './common';
 
 export async function signUp(

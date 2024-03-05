@@ -12,7 +12,7 @@ import {
 import { ModuleRef, Reflector } from '@nestjs/core';
 
 import { Config, getRequestResponseFromContext } from '../../fundamentals';
-import { parseAuthUserSeqNum, SessionService } from './session';
+import { AuthService, parseAuthUserSeqNum } from './service';
 
 function extractTokenFromHeader(authorization: string) {
   if (!/^Bearer\s/i.test(authorization)) {
@@ -24,7 +24,7 @@ function extractTokenFromHeader(authorization: string) {
 
 @Injectable()
 export class AuthGuard implements CanActivate, OnModuleInit {
-  private session!: SessionService;
+  private auth!: AuthService;
 
   constructor(
     private readonly config: Config,
@@ -33,7 +33,7 @@ export class AuthGuard implements CanActivate, OnModuleInit {
   ) {}
 
   onModuleInit() {
-    this.session = this.ref.get(SessionService, { strict: false });
+    this.auth = this.ref.get(AuthService, { strict: false });
   }
 
   async canActivate(context: ExecutionContext) {
@@ -42,7 +42,7 @@ export class AuthGuard implements CanActivate, OnModuleInit {
 
     // check cookie
     let sessionToken: string | undefined =
-      req.cookies[this.session.sessionCookieName];
+      req.cookies[this.auth.sessionCookieName];
 
     // backward compatibility for client older then 0.12
     // TODO: remove
@@ -56,9 +56,9 @@ export class AuthGuard implements CanActivate, OnModuleInit {
     }
 
     if (sessionToken) {
-      const user = await this.session.validate(
+      const user = await this.auth.getUser(
         sessionToken,
-        parseAuthUserSeqNum(req.headers[this.session.authUserSeqCookieName])
+        parseAuthUserSeqNum(req.headers[this.auth.authUserSeqCookieName])
       );
 
       if (user) {
@@ -70,7 +70,7 @@ export class AuthGuard implements CanActivate, OnModuleInit {
     else if (token) {
       const accessToken = extractTokenFromHeader(token);
       if (accessToken) {
-        const user = await this.session.validate(accessToken);
+        const user = await this.auth.getUser(accessToken);
         if (user) {
           req.user = user;
         }

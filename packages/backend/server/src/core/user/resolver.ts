@@ -24,7 +24,7 @@ import { sessionUser } from '../auth/session';
 import { FeatureManagementService } from '../features';
 import { QuotaService } from '../quota';
 import { AvatarStorage } from '../storage';
-import { UsersService } from './service';
+import { UserService } from './service';
 import {
   DeleteAccount,
   RemoveAvatar,
@@ -44,7 +44,7 @@ export class UserResolver {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly storage: AvatarStorage,
-    private readonly users: UsersService,
+    private readonly users: UserService,
     private readonly feature: FeatureManagementService,
     private readonly quota: QuotaService,
     private readonly event: EventEmitter

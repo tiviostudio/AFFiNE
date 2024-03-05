@@ -1,6 +1,6 @@
 import { AuthModule } from '../../core/auth';
 import { ServerFeature } from '../../core/config';
-import { UsersModule } from '../../core/users';
+import { UserModule } from '../../core/user';
 import { Plugin } from '../registry';
 import { OAuthController } from './controller';
 import { OAuthProviders } from './providers';
@@ -10,7 +10,7 @@ import { OAuthService } from './service';
 
 @Plugin({
   name: 'oauth',
-  imports: [AuthModule, UsersModule],
+  imports: [AuthModule, UserModule],
   providers: [
     OAuthProviderFactory,
     OAuthService,

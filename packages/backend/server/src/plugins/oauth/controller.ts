@@ -9,9 +9,8 @@ import {
 import { ConnectedAccount, PrismaClient } from '@prisma/client';
 import type { Request, Response } from 'express';
 
-import { Public } from '../../core/auth';
-import { SessionService } from '../../core/auth/session';
-import { UsersService } from '../../core/users';
+import { AuthService, Public } from '../../core/auth';
+import { UserService } from '../../core/user';
 import { URLHelper } from '../../fundamentals';
 import { OAuthAccount, Tokens } from './providers/def';
 import { OAuthProviderFactory } from './register';
@@ -21,12 +20,12 @@ import { OAuthProviderName } from './types';
 @Controller('/oauth')
 export class OAuthController {
   constructor(
-    private readonly auth: OAuthService,
-    private readonly user: UsersService,
+    private readonly auth: AuthService,
+    private readonly oauth: OAuthService,
+    private readonly user: UserService,
     private readonly providerFactory: OAuthProviderFactory,
     private readonly url: URLHelper,
-    private readonly db: PrismaClient,
-    private readonly session: SessionService
+    private readonly db: PrismaClient
   ) {}
 
   @Public()
@@ -44,7 +43,7 @@ export class OAuthController {
       throw new BadRequestException('Invalid provider');
     }
 
-    const state = await this.auth.saveOAuthState({
+    const state = await this.oauth.saveOAuthState({
       redirectUri: redirectUri ?? this.url.home,
       provider: providerName,
     });
@@ -68,7 +67,7 @@ export class OAuthController {
       throw new BadRequestException('Invalid callback state parameter');
     }
 
-    const state = await this.auth.getOAuthState(stateStr);
+    const state = await this.oauth.getOAuthState(stateStr);
 
     if (!state) {
       throw new BadRequestException('OAuth state expired, please try again.');
@@ -98,13 +97,13 @@ export class OAuthController {
           externAccount,
           tokens
         );
-        const session = await this.session.createSession(
+        const session = await this.auth.createUserSession(
           user,
-          req.cookies[this.session.sessionCookieName]
+          req.cookies[this.auth.sessionCookieName]
         );
-        res.cookie(this.session.sessionCookieName, session.sessionId, {
+        res.cookie(this.auth.sessionCookieName, session.sessionId, {
           expires: session.expiresAt ?? void 0, // expiredAt is `string | null`
-          ...this.session.cookieOptions,
+          ...this.auth.cookieOptions,
         });
       } else {
         // if user is found, connect the account to this user

@@ -30,7 +30,7 @@ import {
 import { CurrentUser, Public } from '../../auth';
 import { QuotaManagementService, QuotaQueryType } from '../../quota';
 import { WorkspaceBlobStorage } from '../../storage';
-import { UsersService, UserType } from '../../users';
+import { UserService, UserType } from '../../user';
 import { PermissionService } from '../permission';
 import {
   InvitationType,
@@ -56,7 +56,7 @@ export class WorkspaceResolver {
     private readonly prisma: PrismaClient,
     private readonly permissions: PermissionService,
     private readonly quota: QuotaManagementService,
-    private readonly users: UsersService,
+    private readonly users: UserService,
     private readonly event: EventEmitter,
     private readonly blobStorage: WorkspaceBlobStorage
   ) {}

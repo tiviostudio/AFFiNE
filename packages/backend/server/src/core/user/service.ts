@@ -4,7 +4,15 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { Quota_FreePlanV1_1 } from '../quota/schema';
 
 @Injectable()
-export class UsersService {
+export class UserService {
+  defaultUserSelect = {
+    id: true,
+    name: true,
+    email: true,
+    emailVerifiedAt: true,
+    avatarUrl: true,
+  } satisfies Prisma.UserSelect;
+
   constructor(private readonly prisma: PrismaClient) {}
 
   get userCreatingData(): Partial<Prisma.UserCreateInput> {
@@ -54,6 +62,7 @@ export class UsersService {
     return this.prisma.user
       .findUnique({
         where: { id },
+        select: this.defaultUserSelect,
       })
       .catch(() => {
         return null;
@@ -61,6 +70,21 @@ export class UsersService {
   }
 
   async findUserByEmail(email: string) {
+    return this.prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: 'insensitive',
+        },
+      },
+      select: this.defaultUserSelect,
+    });
+  }
+
+  /**
+   * supposed to be used only for `Credential SignIn`
+   */
+  async findUserWithHashedPasswordByEmail(email: string) {
     return this.prisma.user.findFirst({
       where: {
         email: {

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   BadRequestException,
   Body,
@@ -10,22 +12,20 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { omit } from 'lodash-es';
 
 import {
   Config,
   PaymentRequiredException,
   URLHelper,
 } from '../../fundamentals';
-import { UsersService } from '../users';
+import { UserService } from '../user';
 import { CurrentUser } from './current-user';
 import { Public } from './guard';
-import { AuthService } from './service';
-import { parseAuthUserSeqNum, SessionService } from './session';
+import { AuthService, parseAuthUserSeqNum } from './service';
 import { TokenService, TokenType } from './token';
 
-interface SignInCredential {
-  email: string;
+class SignInCredential {
+  email!: string;
   password?: string;
 }
 
@@ -35,8 +35,7 @@ export class AuthController {
     private readonly config: Config,
     private readonly url: URLHelper,
     private readonly auth: AuthService,
-    private readonly user: UsersService,
-    private readonly session: SessionService,
+    private readonly user: UserService,
     private readonly token: TokenService
   ) {}
 
@@ -57,20 +56,13 @@ export class AuthController {
     }
 
     if (credential.password) {
-      const session = await this.session.signIn(
+      const user = await this.auth.signIn(
         credential.email,
-        credential.password,
-        req.cookies[this.session.sessionCookieName]
+        credential.password
       );
 
-      res.cookie(this.session.sessionCookieName, session.sessionId, {
-        expires: session.expiresAt ?? void 0, // expiredAt is `string | null`
-        ...this.session.cookieOptions,
-      });
-
-      const user = await this.user.findUserById(session.userId);
-
-      res.send(omit(user, 'password'));
+      await this.auth.setCookie(req, res, user);
+      res.send(user);
     } else {
       // send email magic link
       const user = await this.user.findUserByEmail(credential.email);
@@ -112,18 +104,18 @@ export class AuthController {
     @Res() res: Response,
     @Query('redirect_uri') redirectUri?: string
   ) {
-    const session = await this.session.signOut(
-      req.cookies[this.session.sessionCookieName],
-      parseAuthUserSeqNum(req.headers[this.session.authUserSeqCookieName])
+    const session = await this.auth.signOut(
+      req.cookies[this.auth.sessionCookieName],
+      parseAuthUserSeqNum(req.headers[this.auth.authUserSeqCookieName])
     );
 
     if (session) {
-      res.cookie(this.session.sessionCookieName, session.id, {
+      res.cookie(this.auth.sessionCookieName, session.id, {
         expires: session.expiresAt ?? void 0, // expiredAt is `string | null`
-        ...this.session.cookieOptions,
+        ...this.auth.cookieOptions,
       });
     } else {
-      res.clearCookie(this.session.sessionCookieName);
+      res.clearCookie(this.auth.sessionCookieName);
     }
 
     if (redirectUri) {
@@ -131,12 +123,6 @@ export class AuthController {
     } else {
       return res.send(null);
     }
-  }
-
-  @Public()
-  @Get('/challenge')
-  async challenge() {
-    return this.session.createChallengeToken();
   }
 
   @Public()
@@ -166,7 +152,7 @@ export class AuthController {
       emailVerifiedAt: new Date(),
     });
 
-    await this.session.setCookie(req, res, user);
+    await this.auth.setCookie(req, res, user);
 
     return this.url.safeRedirect(res, redirectUri);
   }
@@ -176,7 +162,7 @@ export class AuthController {
     @CurrentUser() user: CurrentUser,
     @Query('redirect_uri') redirect_uri?: string
   ) {
-    const session = await this.session.createSession(
+    const session = await this.auth.createUserSession(
       user,
       undefined,
       this.config.auth.accessToken.ttl
@@ -185,5 +171,38 @@ export class AuthController {
     this.url.link(redirect_uri ?? '/open-app/redirect', {
       token: session.sessionId,
     });
+  }
+
+  @Public()
+  @Get('/session')
+  async currentSessionUser(@CurrentUser() user?: CurrentUser) {
+    return {
+      user,
+    };
+  }
+
+  @Public()
+  @Get('/sessions')
+  async currentSessionUsers(@Req() req: Request) {
+    const token = req.cookies[this.auth.sessionCookieName];
+    if (!token) {
+      return {
+        users: [],
+      };
+    }
+
+    return {
+      users: await this.auth.getUserList(token),
+    };
+  }
+
+  @Public()
+  @Get('/challenge')
+  async challenge() {
+    // TODO: impl in following PR
+    return {
+      challenge: randomUUID(),
+      resource: randomUUID(),
+    };
   }
 }
